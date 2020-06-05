@@ -16,31 +16,28 @@ import numpy as np
 from utils.loss import *
 from utils.print_time import *
 from utils.save_log_to_excel import *
-from dataloader import JDataSet
+from dataloader import *
 from J_model import *
 import time
 import xlwt
 from utils.ms_ssim import *
 
-LR = 0.0004  # 学习率
-EPOCH = 80  # 轮次
+LR = 0.0008  # 学习率
+EPOCH = 200  # 轮次
 BATCH_SIZE = 1  # 批大小
 excel_train_line = 1  # train_excel写入的行的下标
 excel_val_line = 1  # val_excel写入的行的下标
 alpha = 1  # 损失函数的权重
 accumulation_steps = 8  # 梯度积累的次数，类似于batch-size=8
-# itr_to_lr = 10000 // BATCH_SIZE  # 训练10000次后损失下降50%
 itr_to_excel = 8 // BATCH_SIZE  # 训练64次后保存相关数据到excel
 loss_num = 12  # 包括参加训练和不参加训练的loss
 weight = [1, 1, 1]
 
-# train_haze_path = '/home/aistudio/work/data/cut_ntire_2018/train/'  # 去雾训练集的路径
-# val_haze_path = '/home/aistudio/work/data/cut_ntire_2018/val/'  # 去雾验证集的路径
-# gt_path = '/home/aistudio/work/data/cut_ntire_2018/gth/'
-data_path = '/input/data/'
+data_path = '/home/liu/data/'
 train_haze_path = data_path + 'nyu/train/'  # 去雾训练集的路径
 val_haze_path = data_path + 'nyu/val/'  # 去雾验证集的路径
 gt_path = data_path + 'nyu/gth/'
+train_result_wAt_path = data_path + 'train_result_wAt/'
 
 save_path = './AtJ_result_nyu_' + time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime()) + '/'
 save_model_name = save_path + 'J_model.pt'  # 保存模型的路径
@@ -61,18 +58,18 @@ if not os.path.exists(save_path):
 # 数据转换模式
 transform = transforms.Compose([transforms.ToTensor()])
 # 读取训练集数据
-train_path_list = [train_haze_path, gt_path]
-train_data = AtJDataSet(transform, train_path_list)
+train_path_list = [train_haze_path, gt_path, train_result_wAt_path]
+train_data = train_DataSet(transform, train_path_list)
 train_data_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
 
 # 读取验证集数据
 val_path_list = [val_haze_path, gt_path]
-val_data = AtJDataSet(transform, val_path_list)
+val_data = val_DataSet(transform, val_path_list)
 val_data_loader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
 
 # 定义优化器
 optimizer = torch.optim.Adam(net.parameters(), lr=LR, weight_decay=1e-5)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.7)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.7)
 
 min_loss = 999999999
 min_epoch = 0
@@ -87,12 +84,12 @@ for epoch in range(EPOCH):
     loss = 0
     loss_excel = [0] * loss_num
     net.train()
-    for haze_image, gt_image in train_data_loader:
+    for haze_image, dehazy_image, gt_image in train_data_loader:
         index += 1
         itr += 1
         J = net(haze_image)
         # J, A, t = net(haze_image)
-        loss_image = [J, gt_image]
+        loss_image = [J, gt_image, dehazy_image]
         loss, temp_loss = loss_function(loss_image, weight)
         train_loss += loss.item()
         loss_excel = [loss_excel[i] + temp_loss[i] for i in range(len(loss_excel))]
@@ -107,7 +104,6 @@ for epoch in range(EPOCH):
             loss_excel = [loss_excel[i] / itr_to_excel for i in range(len(loss_excel))]
             print('epoch %d, %03d/%d' % (epoch + 1, index, len(train_data_loader)))
             print('L2=%.5f\n' 'SIM=%.5f\n' 'VGG=%.5f\n' % (loss_excel[0], loss_excel[1], loss_excel[2]))
-            # print('L2=%.5f\n' 'SSIM=%.5f\n' % (loss_excel[0], loss_excel[1]))
             print_time(start_time, index, EPOCH, len(train_data_loader), epoch)
             # excel_train_line = write_excel(sheet=sheet_train, data_type='train', line=excel_train_line, epoch=epoch,
             # itr=itr, loss=loss_excel, weight=weight)

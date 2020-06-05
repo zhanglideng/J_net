@@ -12,6 +12,8 @@ def l2_loss(output, gth):
 
 def ssim_loss(output, gth, channel=3):
     losser = MS_SSIM(max_val=1, channel=channel).cuda()
+    print('ssim')
+    print(losser(output, gth))
     # losser = MS_SSIM(data_range=1.).cuda()
     return 1 - losser(output, gth)
 
@@ -26,6 +28,8 @@ def vgg_loss(output, gth):
                + loss_mse(output_features[1], gth_features[1]) * 0.25 \
                + loss_mse(output_features[2], gth_features[2]) * 0.25 \
                + loss_mse(output_features[3], gth_features[3]) * 0.25
+    print('vgg')
+    print(sum_loss)
     return sum_loss
 
 
